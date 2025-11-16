@@ -966,15 +966,11 @@ class AutoclickerGUI(QWidget):
         self._settings.setValue("geometry", self.saveGeometry())
         self._settings.setValue("size", f"{self.width()},{self.height()}")
 
-# ====== Entrypoint ======
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
+# ====== Entrypoint helpers ======
+def build_default_settings() -> Settings:
+    """Return the baseline settings tuned for the macOS workflow."""
 
-    # Use system default font on macOS to avoid Roboto warning
-    sys_font = QFontDatabase.systemFont(QFontDatabase.GeneralFont)
-    app.setFont(sys_font)
-
-    default_settings = Settings(
+    return Settings(
         interval_mean=1.0490, interval_std=0.9313,
         duration_mean=0.1613, duration_std=0.0257,
         run_duration=None,
@@ -998,6 +994,21 @@ if __name__ == "__main__":
         area_x=100, area_y=100, area_w=400, area_h=300
     )
 
+
+def launch_gui(default_settings: Settings, *, force_system_font: bool = False) -> int:
+    """Create the QApplication, window, and return the exec_ exit code."""
+
+    app = QApplication(sys.argv)
+
+    if force_system_font:
+        sys_font = QFontDatabase.systemFont(QFontDatabase.GeneralFont)
+        app.setFont(sys_font)
+
     window = AutoclickerGUI(default_settings)
     window.show()
-    sys.exit(app.exec_())
+    return app.exec_()
+
+
+# ====== Entrypoint ======
+if __name__ == "__main__":
+    sys.exit(launch_gui(build_default_settings(), force_system_font=True))
