@@ -205,6 +205,7 @@ class AutoclickerThread(QThread):
     finished_signal      = pyqtSignal()
     rest_progress_signal = pyqtSignal(int)
     next_rest_label      = pyqtSignal(str)
+    run_remaining_label  = pyqtSignal(str)
 
     def __init__(self, settings: Settings, parent=None):
         super().__init__(parent)
@@ -304,15 +305,25 @@ class AutoclickerThread(QThread):
             next_rest_time = self.next_rest_time
             last_rest_anchor = self.last_rest_anchor
             paused_until = self.paused_until
+            run_duration = self.settings.run_duration
+
+        now = time.time()
+        elapsed = now - start_time if start_time else 0.0
+
+        if running and start_time:
+            if run_duration:
+                rem = fmt_hms(max(0.0, run_duration - elapsed))
+            else:
+                rem = "∞"
+        else:
+            rem = "—"
+        self.run_remaining_label.emit(rem)
 
         if not running or not start_time:
             self._emit_status("Stopped", "")
             self.rest_progress_signal.emit(0)
             self.next_rest_label.emit("—")
             return
-
-        now = time.time()
-        elapsed = now - start_time
 
         if paused_until > now:
             self._emit_status("Paused (mouse activity)", f"Resumes in {fmt_hms(paused_until - now)}")
@@ -544,6 +555,7 @@ class AutoclickerGUI(QWidget):
         self.thread.finished_signal.connect(lambda: self._set_status("Run done", ""))
         self.thread.rest_progress_signal.connect(self.main_rest_progress.setValue)
         self.thread.next_rest_label.connect(self.main_next_rest.setText)
+        self.thread.run_remaining_label.connect(self.main_run_remaining.setText)
         self.thread.start()
 
         # heartbeat timer
@@ -589,6 +601,12 @@ class AutoclickerGUI(QWidget):
         self.main_next_rest = QLabel("—")
         next_rest_line.addWidget(self.main_next_rest)
         v.addLayout(next_rest_line)
+
+        run_line = QHBoxLayout()
+        run_line.addWidget(QLabel("Run remaining:"))
+        self.main_run_remaining = QLabel("—")
+        run_line.addWidget(self.main_run_remaining)
+        v.addLayout(run_line)
 
         # Quick toggles
         toggles = QGroupBox("Quick Toggles")
