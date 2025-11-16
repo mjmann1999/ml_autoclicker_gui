@@ -45,13 +45,6 @@ class Settings:
     rest_duration_min: int
     rest_duration_max: int
 
-    # Dynamic std gain
-    dynamic_std_enabled: bool
-    interval_std_gain_per_min: float
-    interval_std_max: float
-    duration_std_gain_per_min: float
-    duration_std_max: float
-
     # Human-like rest & micro-rests
     human_like_rests: bool
     micro_rests_enabled: bool
@@ -96,15 +89,19 @@ def payload_to_settings(payload: dict, default: Settings) -> Settings:
     rd = d.get("run_duration", 0) or 0
     d["run_duration"] = None if int(rd) == 0 else float(rd)
 
-    # graceful fallback for renamed keys
-    if "interval_std_gain_per_min" not in d and "std_increase_rate_interval_std" in d:
-        d["interval_std_gain_per_min"] = d.pop("std_increase_rate_interval_std")
-    if "interval_std_max" not in d and "std_max_interval_std" in d:
-        d["interval_std_max"] = d.pop("std_max_interval_std")
-    if "duration_std_gain_per_min" not in d and "std_increase_rate_duration_std" in d:
-        d["duration_std_gain_per_min"] = d.pop("std_increase_rate_duration_std")
-    if "duration_std_max" not in d and "std_max_duration_std" in d:
-        d["duration_std_max"] = d.pop("std_max_duration_std")
+    legacy_dynamic_keys = [
+        "dynamic_std_enabled",
+        "interval_std_gain_per_min",
+        "interval_std_max",
+        "duration_std_gain_per_min",
+        "duration_std_max",
+        "std_increase_rate_interval_std",
+        "std_max_interval_std",
+        "std_increase_rate_duration_std",
+        "std_max_duration_std",
+    ]
+    for key in legacy_dynamic_keys:
+        d.pop(key, None)
 
     # supply any missing fields from default
     for k, v in asdict(default).items():
@@ -397,21 +394,8 @@ class AutoclickerThread(QThread):
             now = time.time()
             elapsed = now - start_time
 
-            # Dynamic std
-            if self.settings.dynamic_std_enabled:
-                std_i = min(
-                    self.settings.interval_std +
-                    self.settings.interval_std_gain_per_min * (elapsed / 60.0),
-                    self.settings.interval_std_max
-                )
-                std_d = min(
-                    self.settings.duration_std +
-                    self.settings.duration_std_gain_per_min * (elapsed / 60.0),
-                    self.settings.duration_std_max
-                )
-            else:
-                std_i = self.settings.interval_std
-                std_d = self.settings.duration_std
+            std_i = self.settings.interval_std
+            std_d = self.settings.duration_std
 
             # Stop by run_duration
             if self.settings.run_duration and elapsed >= self.settings.run_duration:
@@ -674,23 +658,6 @@ class AutoclickerGUI(QWidget):
         gl.addWidget(QLabel("Run Duration (s, 0 = ∞):"), 2, 0); gl.addWidget(self.spin_run_duration, 2, 1, 1, 3)
         v.addWidget(ag)
 
-        # Dynamic std
-        dg = QGroupBox("Dynamic Standard Deviation")
-        dl = QGridLayout(dg)
-        self.cb_dynamic = QCheckBox("Enable dynamic std gain over time")
-        self.cb_dynamic.setChecked(s.dynamic_std_enabled)
-        self.spin_i_gain = QDoubleSpinBox(); self.spin_i_gain.setDecimals(3); self.spin_i_gain.setRange(0.0, 1.0); self.spin_i_gain.setValue(s.interval_std_gain_per_min)
-        self.spin_i_max  = QDoubleSpinBox(); self.spin_i_max.setDecimals(3);  self.spin_i_max.setRange(0.0, 10.0); self.spin_i_max.setValue(s.interval_std_max)
-        self.spin_d_gain = QDoubleSpinBox(); self.spin_d_gain.setDecimals(3); self.spin_d_gain.setRange(0.0, 1.0); self.spin_d_gain.setValue(s.duration_std_gain_per_min)
-        self.spin_d_max  = QDoubleSpinBox(); self.spin_d_max.setDecimals(3);  self.spin_d_max.setRange(0.0, 10.0); self.spin_d_max.setValue(s.duration_std_max)
-
-        dl.addWidget(self.cb_dynamic, 0, 0, 1, 4)
-        dl.addWidget(QLabel("Interval std + / min:"), 1, 0); dl.addWidget(self.spin_i_gain, 1, 1)
-        dl.addWidget(QLabel("Interval std max:"),    1, 2); dl.addWidget(self.spin_i_max,  1, 3)
-        dl.addWidget(QLabel("Duration std + / min:"),2, 0); dl.addWidget(self.spin_d_gain, 2, 1)
-        dl.addWidget(QLabel("Duration std max:"),    2, 2); dl.addWidget(self.spin_d_max,  2, 3)
-        v.addWidget(dg)
-
         # Rests
         rg = QGroupBox("Rest Settings")
         rl = QGridLayout(rg)
@@ -797,11 +764,6 @@ class AutoclickerGUI(QWidget):
             subsequent_rest_max=self.spin_sub_max.value(),
             rest_duration_min=self.spin_rest_min.value(),
             rest_duration_max=self.spin_rest_max.value(),
-            dynamic_std_enabled=self.cb_dynamic.isChecked(),
-            interval_std_gain_per_min=self.spin_i_gain.value(),
-            interval_std_max=self.spin_i_max.value(),
-            duration_std_gain_per_min=self.spin_d_gain.value(),
-            duration_std_max=self.spin_d_max.value(),
             human_like_rests=self.cb_human_like.isChecked(),
             micro_rests_enabled=self.cb_micro.isChecked(),
             micro_rest_prob=self.spin_micro_prob.value(),
@@ -818,12 +780,6 @@ class AutoclickerGUI(QWidget):
     def _validate(self, s: Settings) -> bool:
         if s.first_rest_min > s.first_rest_max or s.subsequent_rest_min > s.subsequent_rest_max or s.rest_duration_min > s.rest_duration_max:
             QMessageBox.warning(self, "Validation", "Rest ranges invalid.")
-            return False
-        if s.dynamic_std_enabled and (
-            s.interval_std_gain_per_min < 0 or s.interval_std_max < s.interval_std or
-            s.duration_std_gain_per_min < 0 or s.duration_std_max < s.duration_std
-        ):
-            QMessageBox.warning(self, "Validation", "Dynamic std limits invalid.")
             return False
         if s.micro_rests_enabled and s.micro_rest_min_s > s.micro_rest_max_s:
             QMessageBox.warning(self, "Validation", "Micro-rest min/max invalid.")
@@ -879,7 +835,7 @@ class AutoclickerGUI(QWidget):
         self.btn_apply_adv.setEnabled(enabled)
         for w in [
             self.spin_interval_mean, self.spin_interval_std, self.spin_duration_mean, self.spin_duration_std,
-            self.spin_run_duration, self.cb_dynamic, self.spin_i_gain, self.spin_i_max, self.spin_d_gain, self.spin_d_max,
+            self.spin_run_duration,
             self.spin_first_min, self.spin_first_max, self.spin_sub_min, self.spin_sub_max, self.spin_rest_min, self.spin_rest_max,
             self.cb_human_like, self.cb_micro, self.spin_micro_prob, self.spin_micro_min, self.spin_micro_max
         ]:
@@ -964,12 +920,6 @@ class AutoclickerGUI(QWidget):
         self.spin_rest_max.setValue(s.rest_duration_max)
         self.cb_human_like.setChecked(s.human_like_rests)
 
-        self.cb_dynamic.setChecked(s.dynamic_std_enabled)
-        self.spin_i_gain.setValue(s.interval_std_gain_per_min)
-        self.spin_i_max.setValue(s.interval_std_max)
-        self.spin_d_gain.setValue(s.duration_std_gain_per_min)
-        self.spin_d_max.setValue(s.duration_std_max)
-
         self.cb_pause_on_move.setChecked(s.pause_on_mouse_move)
         self.spin_idle_after_move.setValue(s.idle_after_move_s)
         self.spin_move_speed.setValue(s.move_speed_px_per_s)
@@ -1032,10 +982,6 @@ if __name__ == "__main__":
         first_rest_min=30, first_rest_max=45,
         subsequent_rest_min=20, subsequent_rest_max=30,
         rest_duration_min=1,  rest_duration_max=3,
-
-        dynamic_std_enabled=False,
-        interval_std_gain_per_min=0.05, interval_std_max=3.0,
-        duration_std_gain_per_min=0.02, duration_std_max=1.0,
 
         human_like_rests=True,
         micro_rests_enabled=True,
