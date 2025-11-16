@@ -23,13 +23,14 @@ Install the requirements using pip:
 pip install pyqt5 pyautogui numpy
 ```  
 
-## Usage  
-1. Run `python main.py` to launch the GUI.  
-2. Adjust the click timing, rest schedule, and other settings in the **Advanced** tab.  
-3. Optionally choose a target area or jitter radius under **Targeting**.  
-4. Save your configuration as a profile in the **Profiles** tab if desired.  
-5. Click **Start** on the **Main** tab to begin automatic clicking.  
-6. Click **Stop** to halt the autoclicker. You can also trigger the failsafe by moving the mouse to the top‑left corner of your screen.  
+## Usage
+1. **macOS** – Run `python main.py` to launch the GUI with fonts tuned for macOS.
+2. **Windows** – Run `python main_windows.py` to start the GUI with Windows-friendly defaults and high-DPI tweaks.
+3. Adjust the click timing, rest schedule, and other settings in the **Advanced** tab.
+4. Optionally choose a target area or jitter radius under **Targeting**.
+5. Save your configuration as a profile in the **Profiles** tab if desired.
+6. Click **Start** on the **Main** tab to begin automatic clicking.
+7. Click **Stop** to halt the autoclicker. You can also trigger the failsafe by moving the mouse to the top-left corner of your screen.
 
 ## Disclaimer  
 This tool is provided for educational and personal automation purposes. Use it responsibly and ensure that your automation complies with the terms of service of any software you interact with.
